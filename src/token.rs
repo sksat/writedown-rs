@@ -4,20 +4,24 @@ use std::str::Chars;
 #[derive(Debug)]
 pub struct Token {
     pub kind: TokenKind,
-    pub len: usize,
+    pos: usize,
+    len: usize,
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Str(String),
     Int(i64),
     Float(f64),
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Comment, // # comment
     Newline,
-    Indent,
-    TabIndent,
+    Indent(usize),
+    TabIndent(usize),
+    Title,
     Literal(Literal),
     Func, // @<hoge>(arg){block}
     FuncArg,
@@ -29,22 +33,39 @@ pub enum TokenKind {
     Unknown,
 }
 
-#[derive(PartialEq)]
-enum TokenizerState {
-    Normal,
-    Newline,
-    Indent(usize),
-    TabIndent(usize),
-    Func,
-    FuncArg,
-    CodeBlock,
-    Unknown,
-}
+//#[derive(PartialEq)]
+//enum TokenizerState {
+//    Normal,
+//    Newline,
+//    Indent(usize),
+//    TabIndent(usize),
+//    FuncArg,
+//    CodeBlock,
+//    Unknown,
+//}
 
+#[derive(Debug, Clone)]
 pub struct Tokenizer<'a> {
     src: &'a str,
     pos: usize,
-    state: TokenizerState,
+    state: TokenKind,
+}
+
+impl<'a> Iterator for Tokenizer<'a> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut token = None;
+        if self.state == TokenKind::Newline {
+            token = self.get_top_token();
+        }
+
+        if let Some(t) = &token {
+            assert!(self.pos <= t.pos);
+            self.pos = t.pos + t.len;
+        }
+        token
+    }
 }
 
 impl<'a> Tokenizer<'a> {
@@ -52,48 +73,41 @@ impl<'a> Tokenizer<'a> {
         Self {
             src,
             pos: 0,
-            state: TokenizerState::Newline,
+            state: TokenKind::Newline,
         }
     }
     pub fn get_src(&self) -> &str {
         &self.src[self.pos..]
     }
-}
-
-impl<'a> Iterator for Tokenizer<'a> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.state == TokenizerState::Newline {
-            let token = self.get_top_token();
-            return token.as_ref();
-        }
-        None
+    pub fn get_str(&self, token: &Token) -> &str {
+        &self.src[token.pos..(token.pos + token.len)]
     }
-}
 
-pub fn get_token(src: &str) -> Token {
-    let c = src.chars().nth(0).unwrap();
+    pub fn get_top_token(&mut self) -> Option<Token> {
+        //let c = self.src.chars().nth(0).unwrap();
+        let c = self.get_src().chars().nth(0).unwrap();
 
-    match c {
-        '=' => {
-            let title = get_title(&src);
-            if title.is_some() {
-                let (level, name) = title.unwrap();
-                println!("title({}): \"{}\"", level, name);
+        match c {
+            '=' => {
+                let title = get_title(&self.src);
+                if title.is_some() {
+                    let (level, name) = title.unwrap();
+                    //println!("title({}): \"{}\"", level, name);
 
-                return Token { s: name };
+                    return Some(Token {
+                        kind: TokenKind::Title,
+                        pos: self.pos + level + 1,
+                        len: name.len(),
+                    });
+                }
+            }
+            _ => {
+                println!("char: {}", c);
             }
         }
-        '\n' => {
-            return Token { s: &src[..1] };
-        }
-        _ => {
-            println!("char: {}", c);
-        }
-    }
 
-    Token { s: &src[..1] }
+        None
+    }
 }
 
 fn get_title(mut s: &str) -> Option<(usize, &str)> {
@@ -132,9 +146,13 @@ aaa===beabnea
 
 == title level 2
 "#;
-        let token = token::tokenize(s);
+
+        let mut tokenizer = token::Tokenizer::new(s);
         println!("string:\n{}", s);
-        println!("token: {:?}", token.collect::<Vec<token::Token>>());
+        for t in tokenizer.clone() {
+            //println!("token: {:?}", token.collect::<Vec<token::Token>>());
+            println!("\"{}\": {:?}", tokenizer.get_str(&t), t);
+        }
     }
 
     #[test]
