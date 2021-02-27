@@ -19,9 +19,10 @@ pub enum Literal {
 pub enum TokenKind {
     Comment, // # comment
     Newline,
+    Sentence,
     Indent(usize),
     TabIndent(usize),
-    Title,
+    Title(usize),
     Literal(Literal),
     Func, // @<hoge>(arg){block}
     FuncArg,
@@ -58,11 +59,15 @@ impl<'a> Iterator for Tokenizer<'a> {
         let mut token = None;
         if self.state == TokenKind::Newline {
             token = self.get_top_token();
+        } else {
+            token = self.get_token();
         }
 
         if let Some(t) = &token {
             assert!(self.pos <= t.pos);
             self.pos = t.pos + t.len;
+
+            self.set_state(&t.kind);
         }
         token
     }
@@ -76,36 +81,99 @@ impl<'a> Tokenizer<'a> {
             state: TokenKind::Newline,
         }
     }
-    pub fn get_src(&self) -> &str {
+    pub fn src(&self) -> &str {
         &self.src[self.pos..]
     }
     pub fn get_str(&self, token: &Token) -> &str {
         &self.src[token.pos..(token.pos + token.len)]
     }
 
+    fn set_state(&mut self, last: &TokenKind) {
+        self.state = match last {
+            _ => last,
+        }
+        .clone();
+    }
+
     pub fn get_top_token(&mut self) -> Option<Token> {
-        //let c = self.src.chars().nth(0).unwrap();
-        let c = self.get_src().chars().nth(0).unwrap();
+        if self.src().len() == 0 {
+            return None;
+        }
+        let c = &self.src().chars().nth(0).unwrap();
 
         match c {
             '=' => {
-                let title = get_title(&self.src);
+                let title = get_title(&self.src());
                 if title.is_some() {
                     let (level, name) = title.unwrap();
-                    //println!("title({}): \"{}\"", level, name);
+                    let title = TokenKind::Title(level);
+                    println!("title({}): \"{}\"", level, name);
 
                     return Some(Token {
-                        kind: TokenKind::Title,
+                        kind: title,
                         pos: self.pos + level + 1,
                         len: name.len(),
                     });
                 }
             }
+            '\n' => {
+                return Some(Token {
+                    kind: TokenKind::Newline,
+                    pos: self.pos,
+                    len: 1,
+                });
+            }
             _ => {
-                println!("char: {}", c);
+                let mut src = self.src().splitn(2, |c| match c {
+                    '\n' | '@' => true,
+                    _ => false,
+                });
+                let s = src.next();
+                if let Some(s) = s {
+                    return Some(Token {
+                        kind: TokenKind::Sentence,
+                        pos: self.pos,
+                        len: s.len(),
+                    });
+                }
             }
         }
 
+        None
+    }
+
+    pub fn get_token(&self) -> Option<Token> {
+        match &self.src().chars().nth(0).unwrap() {
+            '\n' => {
+                return Some(Token {
+                    kind: TokenKind::Newline,
+                    pos: self.pos,
+                    len: 1,
+                });
+            }
+            '@' => {
+                // SNS, func
+                return Some(Token {
+                    kind: TokenKind::Unknown,
+                    pos: self.pos,
+                    len: 1,
+                });
+            }
+            _ => {
+                let mut src = self.src().splitn(2, |c| match c {
+                    '\n' => true,
+                    _ => false,
+                });
+                let s = src.next();
+                if let Some(s) = s {
+                    return Some(Token {
+                        kind: TokenKind::Sentence,
+                        pos: self.pos,
+                        len: s.len(),
+                    });
+                }
+            }
+        }
         None
     }
 }
@@ -145,13 +213,15 @@ hoge fuga
 aaa===beabnea
 
 == title level 2
+
+function test @<func>
 "#;
 
         let mut tokenizer = token::Tokenizer::new(s);
         println!("string:\n{}", s);
         for t in tokenizer.clone() {
             //println!("token: {:?}", token.collect::<Vec<token::Token>>());
-            println!("\"{}\": {:?}", tokenizer.get_str(&t), t);
+            println!("{:?}: \"{}\"", t, tokenizer.get_str(&t));
         }
     }
 
