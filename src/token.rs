@@ -24,7 +24,8 @@ pub enum TokenKind {
     TabIndent(usize),
     Title(usize),
     Literal(Literal),
-    Func, // @<hoge>(arg){block}
+    AtString, // @sksat@mstdn.maud.io
+    Func,     // @<hoge>(arg){block}
     FuncArg,
     FuncBlock,
     Math,       // $y = f(x)$
@@ -123,9 +124,22 @@ impl<'a> Tokenizer<'a> {
                     len: 1,
                 });
             }
+            '@' => {
+                let at = get_at(&self.src());
+                if let Some(at) = at {
+                    let (kind, at) = at;
+                    //println!("at: {}", at);
+
+                    return Some(Token {
+                        kind,
+                        pos: self.pos + 1,
+                        len: at.len(),
+                    });
+                }
+            }
             _ => {
                 let mut src = self.src().splitn(2, |c| match c {
-                    '\n' | '@' => true,
+                    '\n' => true,
                     _ => false,
                 });
                 let s = src.next();
@@ -152,12 +166,17 @@ impl<'a> Tokenizer<'a> {
                 });
             }
             '@' => {
-                // SNS, func
-                return Some(Token {
-                    kind: TokenKind::Unknown,
-                    pos: self.pos,
-                    len: 1,
-                });
+                let at = get_at(&self.src());
+                if let Some(at) = at {
+                    let (kind, at) = at;
+                    //println!("at: {}", at);
+
+                    return Some(Token {
+                        kind,
+                        pos: self.pos + 1,
+                        len: at.len(),
+                    });
+                }
             }
             _ => {
                 let mut src = self.src().splitn(2, |c| match c {
@@ -203,6 +222,41 @@ fn get_title(mut s: &str) -> Option<(usize, &str)> {
     Some((level, s))
 }
 
+fn get_at(s: &str) -> Option<(TokenKind, &str)> {
+    let mut it = s.chars();
+    assert_eq!(it.next().unwrap(), '@');
+    let first = it.next().unwrap();
+
+    let it = it.enumerate();
+    if first == '<' {
+        // func
+        for c in it {
+            let (i, c) = c;
+            //println!("{}, {}", i, c);
+            if c == '>' {
+                return Some((TokenKind::Func, &s[..i + 3]));
+            }
+        }
+        return None;
+    }
+
+    let mut n = 1;
+
+    for c in it {
+        let (i, c) = c;
+        match c {
+            'a'..='z' | 'A'..='Z' => continue,
+            '0'..='9' | '.' | '_' => continue,
+            _ => {
+                n += i;
+                break;
+            }
+        }
+    }
+
+    return Some((TokenKind::AtString, &s[..n]));
+}
+
 #[cfg(test)]
 mod tests {
     use crate::*;
@@ -214,7 +268,12 @@ aaa===beabnea
 
 == title level 2
 
-function test @<func>
+@sksat_tty
+@<func>
+
+function test: @<func>
+SNS test: @sksat_tty @sksat@mstdn.maud.io
+email test: sksat@sksat.net
 "#;
 
         let mut tokenizer = token::Tokenizer::new(s);
