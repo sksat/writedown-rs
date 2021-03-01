@@ -1,4 +1,5 @@
 use std::iter::Enumerate;
+use std::ops::Fn;
 use std::str::Chars;
 
 #[derive(Debug)]
@@ -26,6 +27,8 @@ pub enum TokenKind {
     Literal(Literal),
     AtString, // @sksat@mstdn.maud.io
     Func,     // @<hoge>(arg){block}
+    FuncArgOpen,
+    FuncArgClose,
     FuncArg,
     FuncBlock,
     Math,       // $y = f(x)$
@@ -35,42 +38,52 @@ pub enum TokenKind {
     Unknown,
 }
 
-//#[derive(PartialEq)]
-//enum TokenizerState {
-//    Normal,
-//    Newline,
-//    Indent(usize),
-//    TabIndent(usize),
-//    FuncArg,
-//    CodeBlock,
-//    Unknown,
-//}
-
 #[derive(Debug, Clone)]
 pub struct Tokenizer<'a> {
     src: &'a str,
     pos: usize,
-    state: TokenKind,
+    last: TokenKind,
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut token = None;
-        if self.state == TokenKind::Newline {
-            token = self.get_top_token();
-        } else {
-            token = self.get_token();
+        //let mut token = None;
+        let token = match self.last {
+            TokenKind::Newline => self.get_top_token(),
+            TokenKind::Func => self.get_func_arg_or_default(),
+            TokenKind::FuncArgOpen | TokenKind::FuncArg => self.get_func_arg(),
+            TokenKind::FuncArgClose | TokenKind::FuncBlock => self.get_func_block_or_default(),
+            _ => self.get_token(),
+        };
+        //if self.state == TokenKind::Newline {
+        //    token = self.get_top_token();
+        //} else {
+        //    token = self.get_token();
+        //}
+
+        if token.is_none() {
+            return None;
+        }
+        let t = token.unwrap();
+
+        assert!(self.pos <= t.pos);
+        assert!(t.len != 0);
+        self.pos = t.pos + t.len;
+
+        self.last = t.kind.clone();
+
+        // skip
+        match t.kind {
+            TokenKind::FuncArgOpen | TokenKind::FuncArg => {
+                let _ = self.skip_one(',');
+                self.skip_whitespace();
+            }
+            _ => {}
         }
 
-        if let Some(t) = &token {
-            assert!(self.pos <= t.pos);
-            self.pos = t.pos + t.len;
-
-            self.set_state(&t.kind);
-        }
-        token
+        Some(t)
     }
 }
 
@@ -79,7 +92,7 @@ impl<'a> Tokenizer<'a> {
         Self {
             src,
             pos: 0,
-            state: TokenKind::Newline,
+            last: TokenKind::Newline,
         }
     }
     pub fn src(&self) -> &str {
@@ -89,11 +102,45 @@ impl<'a> Tokenizer<'a> {
         &self.src[token.pos..(token.pos + token.len)]
     }
 
-    fn set_state(&mut self, last: &TokenKind) {
-        self.state = match last {
-            _ => last,
+    //fn set_state(&mut self, last: &TokenKind) {
+    //    let l = last.clone();
+    //    match l {
+    //        TokenKind::Newline => self.state = l,
+    //        _ => {}
+    //    }
+    //}
+
+    pub fn skip_one(&mut self, c: char) -> Option<()> {
+        let src = self.src();
+        let s0 = src.chars().nth(0)?;
+
+        if s0 == c {
+            self.pos += 1;
+            return Some(());
         }
-        .clone();
+
+        None
+    }
+
+    pub fn skip_char<F>(&mut self, f: F)
+    where
+        F: Fn(char) -> bool,
+    {
+        let src = self.src().chars();
+        let mut n = 0;
+        for c in src {
+            if f(c) {
+                n += 1;
+            }
+            {
+                break;
+            }
+        }
+        self.pos += n;
+    }
+
+    pub fn skip_whitespace(&mut self) {
+        self.skip_char(|c| c.is_whitespace())
     }
 
     pub fn get_top_token(&mut self) -> Option<Token> {
@@ -108,7 +155,7 @@ impl<'a> Tokenizer<'a> {
                 if title.is_some() {
                     let (level, name) = title.unwrap();
                     let title = TokenKind::Title(level);
-                    println!("title({}): \"{}\"", level, name);
+                    //println!("title({}): \"{}\"", level, name);
 
                     return Some(Token {
                         kind: title,
@@ -138,18 +185,12 @@ impl<'a> Tokenizer<'a> {
                 }
             }
             _ => {
-                let mut src = self.src().splitn(2, |c| match c {
-                    '\n' => true,
-                    _ => false,
+                let s = get_sentence(self.src());
+                return Some(Token {
+                    kind: TokenKind::Sentence,
+                    pos: self.pos,
+                    len: s.len(),
                 });
-                let s = src.next();
-                if let Some(s) = s {
-                    return Some(Token {
-                        kind: TokenKind::Sentence,
-                        pos: self.pos,
-                        len: s.len(),
-                    });
-                }
             }
         }
 
@@ -179,22 +220,101 @@ impl<'a> Tokenizer<'a> {
                 }
             }
             _ => {
-                let mut src = self.src().splitn(2, |c| match c {
-                    '\n' => true,
-                    _ => false,
+                let s = get_sentence(self.src());
+                return Some(Token {
+                    kind: TokenKind::Sentence,
+                    pos: self.pos,
+                    len: s.len(),
                 });
-                let s = src.next();
-                if let Some(s) = s {
-                    return Some(Token {
-                        kind: TokenKind::Sentence,
-                        pos: self.pos,
-                        len: s.len(),
-                    });
-                }
             }
         }
         None
     }
+
+    pub fn get_func_arg_or_default(&self) -> Option<Token> {
+        let src = &self.src();
+        return match &src.chars().nth(0).unwrap() {
+            '(' => Some(Token {
+                kind: TokenKind::FuncArgOpen,
+                pos: self.pos,
+                len: 1,
+            }),
+            _ => self.get_token(),
+        };
+    }
+
+    pub fn get_func_arg(&self) -> Option<Token> {
+        let src = &self.src();
+        if src.chars().nth(0).unwrap() == ')' {
+            return Some(Token {
+                kind: TokenKind::FuncArgClose,
+                pos: self.pos,
+                len: 1,
+            });
+        }
+
+        let src = src.chars().enumerate();
+
+        for c in src {
+            let (i, c) = c;
+            match c {
+                ',' | ')' => {
+                    println!("arg: {}", &self.src()[..i]);
+                    return Some(Token {
+                        kind: TokenKind::FuncArg,
+                        pos: self.pos,
+                        len: i,
+                    });
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    pub fn get_func_block_or_default(&self) -> Option<Token> {
+        let src = &self.src();
+        if src.chars().nth(0).unwrap() != '{' {
+            return self.get_token();
+        }
+
+        let mut n = 0;
+        for c in src.chars() {
+            n += 1;
+            if c == '}' {
+                break;
+            }
+        }
+        Some(Token {
+            kind: TokenKind::FuncBlock,
+            pos: self.pos,
+            len: n,
+        })
+    }
+}
+
+fn get_sentence(s: &str) -> &str {
+    let it = s.chars().enumerate();
+
+    let mut last = 'A';
+    let mut n = 0;
+    for c in it {
+        let (i, c) = c;
+
+        match c {
+            '\n' => break,
+            '@' => {
+                if last.is_whitespace() {
+                    break;
+                }
+            }
+            _ => {}
+        }
+        n = i;
+        last = c;
+    }
+    println!("sentence: \"{}\"", &s[..n + 1]);
+    &s[..n + 1]
 }
 
 fn get_title(mut s: &str) -> Option<(usize, &str)> {
@@ -234,7 +354,7 @@ fn get_at(s: &str) -> Option<(TokenKind, &str)> {
             let (i, c) = c;
             //println!("{}, {}", i, c);
             if c == '>' {
-                return Some((TokenKind::Func, &s[..i + 3]));
+                return Some((TokenKind::Func, &s[..i + 2]));
             }
         }
         return None;
@@ -270,13 +390,21 @@ aaa===beabnea
 
 @sksat_tty
 @<func>
+@<func>(arg)
+@<func>(arg1,arg2)
+@<func>(arg1,arg2,arg3){block}
+@<func>(a1, a2, a3){
+    b0
+    b1
+    b3
+}
 
 function test: @<func>
 SNS test: @sksat_tty @sksat@mstdn.maud.io
 email test: sksat@sksat.net
 "#;
 
-        let mut tokenizer = token::Tokenizer::new(s);
+        let tokenizer = token::Tokenizer::new(s);
         println!("string:\n{}", s);
         for t in tokenizer.clone() {
             //println!("token: {:?}", token.collect::<Vec<token::Token>>());
