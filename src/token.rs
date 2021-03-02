@@ -30,6 +30,7 @@ pub enum TokenKind {
     Title(usize),
     Literal(Literal),
     AtString, // @sksat@mstdn.maud.io
+    Tag,      // @[tag]
     Func,     // @<hoge>(arg){block}
     FuncArgOpen,
     FuncArgClose,
@@ -75,6 +76,9 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         // skip
         match t.kind {
+            TokenKind::Tag => {
+                let _ = self.skip_one(']');
+            }
             TokenKind::Func => {
                 let _ = self.skip_one('>');
             }
@@ -84,6 +88,9 @@ impl<'a> Iterator for Tokenizer<'a> {
             }
             TokenKind::FuncBlock => {
                 let _ = self.skip_one('}');
+            }
+            TokenKind::InlineCode => {
+                let _ = self.skip_one('`');
             }
             _ => {}
         }
@@ -169,6 +176,7 @@ impl<'a> Tokenizer<'a> {
                 })
             }
             '@' => return self.get_at(),
+            '`' => return self.get_code(),
             _ => {
                 let s = get_sentence(self.src());
                 return Some(Token {
@@ -213,15 +221,21 @@ impl<'a> Tokenizer<'a> {
         let mut c = src.char_indices();
         let first = c.next().unwrap().1;
         match first {
-            '<' => loop {
+            '<' | '[' => loop {
                 let c = c.next();
                 if c.is_none() {
                     return None;
                 }
                 let (i, c) = c.unwrap();
-                if c == '>' {
+
+                let (end, kind) = match first {
+                    '[' => (']', TokenKind::Tag),
+                    '<' => ('>', TokenKind::Func),
+                    _ => unreachable!(),
+                };
+                if c == end {
                     return Some(Token {
-                        kind: TokenKind::Func,
+                        kind,
                         pos: self.pos + 1,
                         len: i - 1,
                     });
@@ -245,6 +259,30 @@ impl<'a> Tokenizer<'a> {
             }
         }
         None
+    }
+
+    pub fn get_code(&mut self) -> Option<Token> {
+        assert_eq!(self.src().chars().nth(0).unwrap(), '`');
+        self.skip_one('`');
+
+        let src = self.src();
+        let mut src = src.char_indices();
+        let f = src.next().unwrap().1;
+        if f != '`' {
+            // inline code
+            for c in src {
+                let (i, c) = c;
+                if c == '`' {
+                    return Some(Token {
+                        kind: TokenKind::InlineCode,
+                        pos: self.pos,
+                        len: i,
+                    });
+                }
+            }
+        }
+
+        unimplemented!("code block");
     }
 
     pub fn get_func_ext_or_default(&mut self) -> Option<Token> {
@@ -390,6 +428,18 @@ email test: sksat@sksat.net
 
 適当な文章 @<func>(a)がある
 脚注だいすき！いちばんすきな注です！ @<ft>{そうか？}
+
+=== tag
+
+@[hoge]
+
+タグが打てると，うれしいんじゃ @[footnote]
+
+@<jmp>(hoge)
+@<ftref>(footnote){脚注もタグにくっつけられると，うれしいんじゃ(分けて書きたい時もあるため)}
+
+`println!("hello, world!");`
+
 "#;
 
         let tokenizer = token::Tokenizer::new(s);
