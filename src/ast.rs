@@ -2,8 +2,9 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum Node {
-    Top(Option<Header>, Rc<Node>),
-    Paragraph(Vec<Node>),
+    //Top(Option<Header>, Rc<Node>),
+    Section(Section),
+    Paragraph(Paragraph),
     Func,
     List,
     Block(Block),
@@ -12,6 +13,22 @@ pub enum Node {
     Link,
     Style(String),
     Unknown(String),
+}
+
+#[derive(Debug)]
+pub struct Section {
+    pub level: usize,
+    pub child: Vec<Node>,
+}
+
+#[derive(Debug)]
+pub struct Paragraph {
+    pub child: Vec<ParagraphChild>,
+}
+
+#[derive(Debug)]
+pub enum ParagraphChild {
+    Sentence(String),
 }
 
 #[derive(Debug)]
@@ -28,4 +45,11 @@ pub enum Block {
     Quote,
 }
 
-pub trait AST {}
+impl Section {
+    pub fn new(level: usize) -> Self {
+        Self {
+            level,
+            child: vec![],
+        }
+    }
+}

@@ -1,6 +1,6 @@
 use std::ops::Fn;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pos: usize,
@@ -47,15 +47,53 @@ pub enum TokenKind {
 pub struct Tokenizer<'a> {
     src: &'a str,
     pos: usize,
-    last: TokenKind,
+    pub before: TokenKind,
+    peeked: Option<Option<Token>>,
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
+        match self.peeked.take() {
+            Some(v) => v,
+            None => self.next_token(),
+        }
+    }
+}
+
+//unsafe impl<'a> SourceIter for &mut Tokenizer<'a> {
+//    type Source = Tokenizer<'a>;
+//
+//    unsafe fn as_inner(&mut self) -> &mut Self::Source {
+//        self
+//    }
+//}
+
+impl<'a> Tokenizer<'a> {
+    pub fn new(src: &'a str) -> Self {
+        Self {
+            src,
+            pos: 0,
+            before: TokenKind::Newline,
+            peeked: None,
+        }
+    }
+    pub fn src(&self) -> &str {
+        &self.src[self.pos..]
+    }
+    pub fn get_str(&self, token: &Token) -> &str {
+        &self.src[token.pos..(token.pos + token.len)]
+    }
+
+    pub fn peek(&mut self) -> Option<Token> {
+        let t = self.next_token();
+        self.peeked.get_or_insert(t).clone()
+    }
+
+    pub fn next_token(&mut self) -> Option<Token> {
         //let mut token = None;
-        let token = match self.last {
+        let token = match self.before {
             TokenKind::Newline => self.get_top_token(),
             TokenKind::Func => self.get_func_ext_or_default(),
             TokenKind::FuncArgOpen | TokenKind::FuncArg => self.get_func_arg(),
@@ -72,7 +110,7 @@ impl<'a> Iterator for Tokenizer<'a> {
         assert!(t.len != 0);
         self.pos = t.pos + t.len;
 
-        self.last = t.kind.clone();
+        self.before = t.kind.clone();
 
         // skip
         match t.kind {
@@ -96,22 +134,6 @@ impl<'a> Iterator for Tokenizer<'a> {
         }
 
         Some(t)
-    }
-}
-
-impl<'a> Tokenizer<'a> {
-    pub fn new(src: &'a str) -> Self {
-        Self {
-            src,
-            pos: 0,
-            last: TokenKind::Newline,
-        }
-    }
-    pub fn src(&self) -> &str {
-        &self.src[self.pos..]
-    }
-    pub fn get_str(&self, token: &Token) -> &str {
-        &self.src[token.pos..(token.pos + token.len)]
     }
 
     pub fn skip_one(&mut self, c: char) -> Option<()> {
@@ -353,7 +375,7 @@ impl<'a> Tokenizer<'a> {
 fn get_sentence(s: &str) -> &str {
     let it = s.chars().enumerate();
 
-    let mut last = 'A';
+    let mut before = 'A';
     let mut n = 0;
     for c in it {
         let (i, c) = c;
@@ -361,17 +383,17 @@ fn get_sentence(s: &str) -> &str {
         match c {
             '\n' => break,
             '@' => {
-                if last.is_whitespace() {
+                if before.is_whitespace() {
                     break;
                 }
             }
             _ => {}
         }
         n = i;
-        last = c;
+        before = c;
     }
     let n = s.char_indices().map(|(i, _)| i).nth(n + 1).unwrap();
-    println!("sentence: \"{}\"", &s[..n]);
+    //println!("sentence: \"{}\"", &s[..n]);
     &s[..n]
 }
 
