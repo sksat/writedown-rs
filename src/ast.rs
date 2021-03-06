@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use crate::token;
 
 #[derive(Debug)]
 pub enum Node {
@@ -18,6 +18,7 @@ pub enum Node {
 #[derive(Debug)]
 pub struct Section {
     pub level: usize,
+    pub title: String,
     pub child: Vec<Node>,
 }
 
@@ -46,9 +47,10 @@ pub enum Block {
 }
 
 impl Section {
-    pub fn new(level: usize) -> Self {
+    pub fn new(title: token::Title) -> Self {
         Self {
-            level,
+            level: title.level,
+            title: title.name,
             child: vec![],
         }
     }

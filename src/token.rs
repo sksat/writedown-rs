@@ -27,7 +27,7 @@ pub enum TokenKind {
     Sentence,
     Indent(usize),
     TabIndent(usize),
-    Title(usize),
+    Title(Title),
     Literal(Literal),
     AtString, // @sksat@mstdn.maud.io
     Tag,      // @[tag]
@@ -43,11 +43,18 @@ pub enum TokenKind {
     Unknown,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Title {
+    pub level: usize,
+    pub name: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Tokenizer<'a> {
     src: &'a str,
     pos: usize,
-    pub before: TokenKind,
+    before: TokenKind,
+    now: Option<Token>,
     peeked: Option<Option<Token>>,
 }
 
@@ -55,10 +62,11 @@ impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.peeked.take() {
+        self.now = match self.peeked.take() {
             Some(v) => v,
             None => self.next_token(),
-        }
+        };
+        self.now.clone()
     }
 }
 
@@ -76,6 +84,7 @@ impl<'a> Tokenizer<'a> {
             src,
             pos: 0,
             before: TokenKind::Newline,
+            now: None,
             peeked: None,
         }
     }
@@ -84,6 +93,10 @@ impl<'a> Tokenizer<'a> {
     }
     pub fn get_str(&self, token: &Token) -> &str {
         &self.src[token.pos..(token.pos + token.len)]
+    }
+
+    pub fn now(&self) -> Option<Token> {
+        self.now.clone()
     }
 
     pub fn peek(&mut self) -> Option<Token> {
@@ -179,14 +192,15 @@ impl<'a> Tokenizer<'a> {
             '=' => {
                 let title = get_title(&self.src());
                 if title.is_some() {
-                    let (level, name) = title.unwrap();
-                    let title = TokenKind::Title(level);
-                    //println!("title({}): \"{}\"", level, name);
+                    let t = title.unwrap();
+                    let level = t.level;
+                    let len = t.name.len();
+                    let kind = TokenKind::Title(t);
 
                     return Some(Token {
-                        kind: title,
+                        kind,
                         pos: self.pos + level + 1,
-                        len: name.len(),
+                        len,
                     });
                 }
             }
@@ -397,7 +411,7 @@ fn get_sentence(s: &str) -> &str {
     &s[..n]
 }
 
-fn get_title(mut s: &str) -> Option<(usize, &str)> {
+fn get_title(mut s: &str) -> Option<Title> {
     let mut level = 0;
     let mut it = s.chars().enumerate();
 
@@ -419,7 +433,10 @@ fn get_title(mut s: &str) -> Option<(usize, &str)> {
         }
     }
 
-    Some((level, s))
+    Some(Title {
+        level,
+        name: s.to_string(),
+    })
 }
 
 #[cfg(test)]
@@ -473,8 +490,8 @@ email test: sksat@sksat.net
 
     #[test]
     fn title() {
-        let (n, s) = token::get_title("== hoge").unwrap();
-        assert_eq!(n, 2);
-        assert_eq!(s, "hoge");
+        let t = token::get_title("== hoge").unwrap();
+        assert_eq!(t.level, 2);
+        assert_eq!(t.name, "hoge");
     }
 }

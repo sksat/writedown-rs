@@ -4,6 +4,9 @@ use crate::token;
 use token::TokenKind;
 use token::Tokenizer;
 
+#[derive(Debug)]
+pub enum ParseError {}
+
 pub struct Parser<'a> {
     tokenizer: &'a mut Tokenizer<'a>,
     pub root: ast::Node,
@@ -13,11 +16,14 @@ impl<'a> Parser<'a> {
     pub fn new(tokenizer: &'a mut Tokenizer<'a>) -> Parser<'a> {
         Self {
             tokenizer,
-            root: ast::Node::Section(ast::Section::new(0)),
+            root: ast::Node::Section(ast::Section::new(token::Title {
+                level: 0,
+                name: "".to_string(),
+            })),
         }
     }
 
-    pub fn parse(&mut self) {
+    pub fn parse(mut self) -> Result<ast::Node, ParseError> {
         let tok = &mut self.tokenizer;
 
         match &mut self.root {
@@ -26,31 +32,33 @@ impl<'a> Parser<'a> {
             }
             _ => {}
         }
+
+        Ok(self.root)
     }
 }
 
 fn parse_section(tok: &mut Tokenizer, section: &mut ast::Section) -> Result<(), ()> {
-    println!("parse_section");
+    //println!("parse_section");
     //assert_eq!(section, ast::Node::Section);
     loop {
-        //let mut tok = tok.peekable();
-        let l = &tok.before;
+        //let l = &tok.before;
         let t = tok.peek();
         if t.is_none() {
             break;
         }
         let t = t.unwrap();
 
-        dbg!(&t.kind);
         match t.kind {
-            TokenKind::Title(level) => {
+            TokenKind::Title(title) => {
                 // child section
                 tok.next();
-                let mut sec = ast::Section::new(level);
+                //let t = tok.peek().unwrap();
+                //if t.kind == TokenKind::Newline {
+                let mut sec = ast::Section::new(title);
                 let _ = parse_section(tok, &mut sec).unwrap();
                 section.child.push(ast::Node::Section(sec));
             }
-            TokenKind::Comment => {
+            TokenKind::Comment | TokenKind::Newline => {
                 let _ = tok.next();
             }
             TokenKind::Unknown => {
@@ -69,7 +77,6 @@ fn parse_section(tok: &mut Tokenizer, section: &mut ast::Section) -> Result<(), 
 }
 
 fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
-    println!("get_paragraph");
     let mut child = Vec::new();
 
     loop {
@@ -80,7 +87,6 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
         }
         let t = t.unwrap();
 
-        dbg!(&t.kind);
         match t.kind {
             TokenKind::Newline => {
                 //let tn = tok.peek();
@@ -88,26 +94,30 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
                 //    break;
                 //}
                 //let tn = tn.unwrap();
-                let _ = tok.next();
-                if tok.before == TokenKind::Newline {
+                if tok.now().unwrap().kind == TokenKind::Newline {
+                    //println!("new paragraph");
+                    let _ = tok.next();
                     break;
                 }
+                let _ = tok.next();
             }
             TokenKind::Sentence => {
                 let t = tok.next().unwrap();
                 let s = tok.get_str(&t);
                 child.push(ast::ParagraphChild::Sentence(s.to_string()));
             }
+            TokenKind::Title(_) => break,
             _ => {
+                dbg!(&t.kind);
                 tok.next();
                 break;
             }
         }
     }
 
-    //if child.is_empty() {
-    //    return None;
-    //}
+    if child.is_empty() {
+        return None;
+    }
     Some(ast::Paragraph { child })
 }
 
@@ -121,6 +131,8 @@ mod tests {
 = title level 1
 sentence1
 sentence2
+sentence3
+sentence4
 
 p1s0
 p1s1
@@ -132,9 +144,9 @@ p1s1
             println!("{:?}: \"{}\"", t.kind, t.get_str(s));
         }
 
-        let mut parser = parse::Parser::new(&mut tokenizer);
-        parser.parse();
+        let parser = parse::Parser::new(&mut tokenizer);
+        let ast = parser.parse().unwrap();
 
-        dbg!(parser.root);
+        dbg!(ast);
     }
 }
