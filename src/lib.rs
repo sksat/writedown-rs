@@ -12,3 +12,7 @@ pub fn parse(src: &str) -> Result<Node, ParseError> {
     let parser = parse::Parser::new(&mut tokenizer);
     parser.parse()
 }
+
+pub trait Render {
+    fn render(&self) -> String;
+}
