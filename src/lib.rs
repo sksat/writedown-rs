@@ -1,4 +1,5 @@
 //#![feature(inplace_iteration)]
+#![feature(assert_matches)]
 
 pub mod ast;
 pub mod parse;

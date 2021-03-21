@@ -147,6 +147,43 @@ p1s1
         let parser = parse::Parser::new(&mut tokenizer);
         let ast = parser.parse().unwrap();
 
-        dbg!(ast);
+        dbg!(&ast);
+
+        assert_matches!(&ast, ast::Node::Section(_));
+        let s = match ast {
+            ast::Node::Section(s) => s,
+            _ => panic!(""),
+        };
+        assert_eq!(s.child.len(), 2);
+
+        let s0 = &s.child[0];
+        let s1 = &s.child[1];
+
+        let s0 = match s0 {
+            ast::Node::Paragraph(p) => p,
+            _ => panic!(),
+        };
+        assert_eq!(s0.child.len(), 1);
+
+        let s1 = match s1 {
+            ast::Node::Section(s) => s,
+            _ => panic!(""),
+        };
+        assert_eq!(s1.child.len(), 2);
+
+        let s10 = &s1.child[0];
+        let s11 = &s1.child[1];
+
+        let s10 = match s10 {
+            ast::Node::Paragraph(p) => p,
+            _ => panic!(""),
+        };
+        let s11 = match s11 {
+            ast::Node::Paragraph(p) => p,
+            _ => panic!(""),
+        };
+
+        assert_eq!(s10.child.len(), 4);
+        assert_eq!(s11.child.len(), 2);
     }
 }

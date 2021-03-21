@@ -143,6 +143,11 @@ impl<'a> Tokenizer<'a> {
             TokenKind::InlineCode => {
                 let _ = self.skip_one('`');
             }
+            TokenKind::CodeBlock => {
+                let _ = self.skip_one('`');
+                let _ = self.skip_one('`');
+                let _ = self.skip_one('`');
+            }
             _ => {}
         }
 
@@ -316,9 +321,41 @@ impl<'a> Tokenizer<'a> {
                     });
                 }
             }
+
+            todo!("error: no end mark of inline code");
         }
 
-        unimplemented!("code block");
+        let c = src.next().unwrap().1;
+        if c != '`' {
+            unimplemented!("code block error");
+        }
+
+        let c = src.next().unwrap().1;
+        if c == '\n' {
+            // default code block(no language)
+            let mut count = 0;
+            for c in src {
+                let (i, c) = c;
+                if c == '`' {
+                    count += 1;
+                    if count == 3 {
+                        return Some(Token {
+                            kind: TokenKind::CodeBlock,
+                            pos: self.pos + 2,
+                            len: i - 4,
+                        });
+                    }
+                    continue;
+                }
+                count = 0;
+            }
+            todo!("code block error");
+        } else if c == ':' {
+            // code block with language
+            todo!("get language");
+        } else {
+            todo!("code block error");
+        }
     }
 
     pub fn get_func_ext_or_default(&mut self) -> Option<Token> {
@@ -478,6 +515,28 @@ email test: sksat@sksat.net
 @<ftref>(footnote){脚注もタグにくっつけられると，うれしいんじゃ(分けて書きたい時もあるため)}
 
 `println!("hello, world!");`
+
+code block
+
+```
+#include <stdio.h>
+
+int main(int argc, char **argv){
+    printf("hello, world!");
+    return 0;
+}
+```
+
+code block(set language option)
+
+```
+#include <iostream>
+
+int main(int argc, char **argv){
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}
+```
 
 "#;
 
