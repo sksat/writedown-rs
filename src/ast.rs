@@ -42,7 +42,7 @@ pub struct Header {
 
 #[derive(Debug)]
 pub enum Block {
-    Code,
+    Code(String),
     Quote,
 }
 

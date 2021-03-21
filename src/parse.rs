@@ -64,6 +64,11 @@ fn parse_section(tok: &mut Tokenizer, section: &mut ast::Section) -> Result<(), 
             TokenKind::Unknown => {
                 panic!("unknown token")
             }
+            TokenKind::CodeBlock => {
+                let blk = ast::Block::Code(tok.get_str(&t).to_string());
+                section.child.push(ast::Node::Block(blk));
+                let _ = tok.next();
+            }
             _ => {
                 let p = get_paragraph(tok);
                 if let Some(p) = p {
@@ -106,7 +111,7 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
                 let s = tok.get_str(&t);
                 child.push(ast::ParagraphChild::Sentence(s.to_string()));
             }
-            TokenKind::Title(_) => break,
+            TokenKind::Title(_) | TokenKind::CodeBlock => break,
             _ => {
                 dbg!(&t.kind);
                 tok.next();

@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use writedown;
 
 pub mod html {
@@ -120,9 +119,26 @@ hogehoge fugafuga
 aaaaaaaaaaaaaaaaa
 
 == title level 2
-hvoeahovea
+hvoea`println!("hoge");`hovea
+
+```
+fn main(){
+    println!("hello");
+}
+```
 "#;
-    let ast = writedown::parse(src).unwrap();
+
+    let mut tokenizer = writedown::token::Tokenizer::new(src);
+
+    let t2 = tokenizer.clone();
+    let token: Vec<writedown::token::Token> = t2.collect();
+    for t in token {
+        eprintln!("{:?}: \"{}\"", t.kind, t.get_str(src));
+    }
+
+    let parser = writedown::parse::Parser::new(&mut tokenizer);
+    let ast = parser.parse().unwrap();
+    //let ast = writedown::parse(src).unwrap();
     dbg!(&ast);
 
     let html: html::Node = ast.into();
