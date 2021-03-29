@@ -119,14 +119,17 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
                 let mut arg = Vec::new();
 
                 let t = tok.peek().unwrap();
-                dbg!(&t.kind);
-                dbg!(&tok.now());
-                if t.kind == TokenKind::FuncArg {
+                //dbg!(&t.kind);
+
+                if t.kind == TokenKind::FuncArgClose {
+                    // no arg
+                    let _ = tok.next().unwrap();
+                } else if t.kind == TokenKind::FuncArg {
                     // get arg
                     loop {
                         let t = tok.peek();
                         let t = t.unwrap();
-                        dbg!(&t);
+                        //dbg!(&t);
                         match t.kind {
                             TokenKind::FuncArg => {
                                 let t = tok.next().unwrap();
@@ -141,18 +144,20 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
                         }
                     }
                 }
-                dbg!(arg);
+                //dbg!(&arg);
+                let arg = if arg.len() == 0 { None } else { Some(arg) };
 
                 let t = tok.peek().unwrap();
-                if t.kind == TokenKind::FuncBlock {
+                let block = if t.kind == TokenKind::FuncBlock {
                     // get block
-                }
+                    let t = tok.next().unwrap();
+                    let s = tok.get_str(&t).to_string();
+                    Some(s)
+                } else {
+                    None
+                };
 
-                child.push(ast::ParagraphChild::Func(ast::Func {
-                    name,
-                    arg: None,
-                    block: None,
-                }))
+                child.push(ast::ParagraphChild::Func(ast::Func { name, arg, block }))
             }
             TokenKind::Title(_) | TokenKind::CodeBlock => break,
             _ => {
@@ -220,7 +225,7 @@ p1s1
             ast::Node::Section(s) => s,
             _ => panic!(""),
         };
-        assert_eq!(s1.child.len(), 4);
+        assert_eq!(s1.child.len(), 3);
 
         let s10 = &s1.child[0];
         let s11 = &s1.child[1];
@@ -241,6 +246,9 @@ p1s1
     #[test]
     fn func() {
         let s = r#"@<f>()
+@<f1>(arg)
+@<f2>(a1, a2)
+@<hoge>(){hogehoge}
 "#;
         let mut tokenizer = token::Tokenizer::new(s);
         let t2 = tokenizer.clone();

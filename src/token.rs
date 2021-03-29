@@ -402,7 +402,7 @@ impl<'a> Tokenizer<'a> {
             let (i, c) = c;
             match c {
                 ',' | ')' => {
-                    println!("arg: {}", &self.src()[..i]);
+                    //println!("arg: {}", &self.src()[..i]);
                     return Some(Token {
                         kind: TokenKind::FuncArg,
                         pos: self.pos,
