@@ -94,14 +94,11 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
 
         match t.kind {
             TokenKind::Newline => {
-                //let tn = tok.peek();
-                //if tn.is_none() {
-                //    break;
-                //}
-                //let tn = tn.unwrap();
-                if tok.now().unwrap().kind == TokenKind::Newline {
+                let now = tok.now();
+
+                if now.unwrap().kind == TokenKind::Newline {
                     //println!("new paragraph");
-                    let _ = tok.next();
+                    let _ = tok.next().unwrap();
                     break;
                 }
                 let _ = tok.next();
@@ -111,9 +108,55 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
                 let s = tok.get_str(&t);
                 child.push(ast::ParagraphChild::Sentence(s.to_string()));
             }
+            TokenKind::Func => {
+                let t = tok.next().unwrap();
+                assert_eq!(t.kind, TokenKind::Func);
+                let name = tok.get_str(&t).to_string();
+
+                let t = tok.next().unwrap();
+                assert_eq!(t.kind, TokenKind::FuncArgOpen);
+
+                let mut arg = Vec::new();
+
+                let t = tok.peek().unwrap();
+                dbg!(&t.kind);
+                dbg!(&tok.now());
+                if t.kind == TokenKind::FuncArg {
+                    // get arg
+                    loop {
+                        let t = tok.peek();
+                        let t = t.unwrap();
+                        dbg!(&t);
+                        match t.kind {
+                            TokenKind::FuncArg => {
+                                let t = tok.next().unwrap();
+                                let a = tok.get_str(&t);
+                                arg.push(a.to_string());
+                            }
+                            TokenKind::FuncArgClose => {
+                                let _ = tok.next().unwrap();
+                                break;
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+                dbg!(arg);
+
+                let t = tok.peek().unwrap();
+                if t.kind == TokenKind::FuncBlock {
+                    // get block
+                }
+
+                child.push(ast::ParagraphChild::Func(ast::Func {
+                    name,
+                    arg: None,
+                    block: None,
+                }))
+            }
             TokenKind::Title(_) | TokenKind::CodeBlock => break,
             _ => {
-                dbg!(&t.kind);
+                println!("get_paragraph: {:?}", &t.kind);
                 tok.next();
                 break;
             }
@@ -141,12 +184,15 @@ sentence4
 
 p1s0
 p1s1
+
+@<f>()
+@<fn>(arg1, arg2)
 "#;
         let mut tokenizer = token::Tokenizer::new(s);
         let t2 = tokenizer.clone();
         let token: Vec<token::Token> = t2.collect();
         for t in token {
-            println!("{:?}: \"{}\"", t.kind, t.get_str(s));
+            println!("token({:?}): \"{}\"", t.kind, t.get_str(s));
         }
 
         let parser = parse::Parser::new(&mut tokenizer);
@@ -174,7 +220,7 @@ p1s1
             ast::Node::Section(s) => s,
             _ => panic!(""),
         };
-        assert_eq!(s1.child.len(), 2);
+        assert_eq!(s1.child.len(), 4);
 
         let s10 = &s1.child[0];
         let s11 = &s1.child[1];
@@ -190,5 +236,23 @@ p1s1
 
         assert_eq!(s10.child.len(), 4);
         assert_eq!(s11.child.len(), 2);
+    }
+
+    #[test]
+    fn func() {
+        let s = r#"@<f>()
+"#;
+        let mut tokenizer = token::Tokenizer::new(s);
+        let t2 = tokenizer.clone();
+        let token: Vec<token::Token> = t2.collect();
+        for t in token {
+            println!("token({:?}): \"{}\"", t.kind, t.get_str(s));
+        }
+
+        println!("parse");
+        let parser = parse::Parser::new(&mut tokenizer);
+        let ast = parser.parse().unwrap();
+
+        dbg!(&ast);
     }
 }

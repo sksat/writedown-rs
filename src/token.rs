@@ -63,8 +63,16 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.now = match self.peeked.take() {
-            Some(v) => v,
-            None => self.next_token(),
+            Some(v) => {
+                //println!("next(peek): {:?}", v);
+                v
+            }
+            None => {
+                let n = self.next_token();
+                //println!("next(new):   {:?}", n);
+                //self.next_token()
+                n
+            }
         };
         self.now.clone()
     }
@@ -100,8 +108,14 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn peek(&mut self) -> Option<Token> {
-        let t = self.next_token();
-        self.peeked.get_or_insert(t).clone()
+        return if self.peeked.is_some() {
+            self.peeked.clone().unwrap()
+        } else {
+            let t = self.next_token();
+            self.peeked.get_or_insert(t).clone()
+        };
+        //let t = self.next_token();
+        //self.peeked.get_or_insert(t).clone()
     }
 
     pub fn next_token(&mut self) -> Option<Token> {
@@ -151,6 +165,7 @@ impl<'a> Tokenizer<'a> {
             _ => {}
         }
 
+        //println!("next_token: {:?}", &t);
         Some(t)
     }
 

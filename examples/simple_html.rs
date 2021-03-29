@@ -30,7 +30,10 @@ pub mod html {
             match node {
                 ast::Node::Section(v) => Node::Section(v.into()),
                 ast::Node::Paragraph(v) => Node::Paragraph(v.into()),
-                _ => unimplemented!(),
+                _ => {
+                    dbg!(node);
+                    unimplemented!()
+                }
             }
         }
     }
@@ -76,6 +79,7 @@ pub mod html {
         fn from(v: ast::ParagraphChild) -> ParagraphChild {
             match v {
                 ast::ParagraphChild::Sentence(s) => ParagraphChild::Sentence(s),
+                _ => unimplemented!(),
             }
         }
     }

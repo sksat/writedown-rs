@@ -30,6 +30,14 @@ pub struct Paragraph {
 #[derive(Debug)]
 pub enum ParagraphChild {
     Sentence(String),
+    Func(Func),
+}
+
+#[derive(Debug)]
+pub struct Func {
+    pub name: String,
+    pub arg: Option<Vec<String>>,
+    pub block: Option<String>,
 }
 
 #[derive(Debug)]
