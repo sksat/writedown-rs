@@ -39,7 +39,7 @@ pub enum TokenKind {
     Math,       // $y = f(x)$
     InlineCode, // `printf("hello");`
     Quote,      // > quote
-    CodeBlock,
+    CodeBlock(Option<String>),
     Unknown,
 }
 
@@ -157,7 +157,7 @@ impl<'a> Tokenizer<'a> {
             TokenKind::InlineCode => {
                 let _ = self.skip_one('`');
             }
-            TokenKind::CodeBlock => {
+            TokenKind::CodeBlock(_) => {
                 let _ = self.skip_one('`');
                 let _ = self.skip_one('`');
                 let _ = self.skip_one('`');
@@ -345,32 +345,44 @@ impl<'a> Tokenizer<'a> {
             unimplemented!("code block error");
         }
 
-        let c = src.next().unwrap().1;
-        if c == '\n' {
-            // default code block(no language)
-            let mut count = 0;
-            for c in src {
+        let c = src.next().unwrap();
+        let mut language = None;
+        let mut opt_len = 1; // first newline
+        if c.1 == ':' {
+            // get language
+            let p = c.0 + 1;
+            let mut end = 0;
+            for c in src.clone() {
                 let (i, c) = c;
-                if c == '`' {
-                    count += 1;
-                    if count == 3 {
-                        return Some(Token {
-                            kind: TokenKind::CodeBlock,
-                            pos: self.pos + 2,
-                            len: i - 4,
-                        });
-                    }
-                    continue;
+                if c.is_whitespace() {
+                    end = i;
+                    break;
                 }
-                count = 0;
             }
-            todo!("code block error");
-        } else if c == ':' {
-            // code block with language
-            todo!("get language");
-        } else {
-            todo!("code block error");
+            opt_len += end - p + 1;
+            let l = &self.src[self.pos + p..self.pos + end];
+            language = Some(l.to_string());
+        } else if c.1 != '\n' {
+            unimplemented!("code block error")
         }
+
+        let mut count = 0;
+        for c in src {
+            let (i, c) = c;
+            if c == '`' {
+                count += 1;
+                if count == 3 {
+                    return Some(Token {
+                        kind: TokenKind::CodeBlock(language),
+                        pos: self.pos + opt_len + 2,
+                        len: i - 4 - opt_len,
+                    });
+                }
+                continue;
+            }
+            count = 0;
+        }
+        unreachable!();
     }
 
     pub fn get_func_ext_or_default(&mut self) -> Option<Token> {
