@@ -3,8 +3,13 @@ name = "writedown"
 version = "0.1.0"
 authors = ["sksat <sksat@sksat.net>"]
 edition = "2018"
+license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+categories = ["text-processing"]
+keywords = ["writedown"]
+readme = "README.md"
+description = "Writedown format parser"
+repository = "https://github.com/sk2sat/writedown-rs"
 
 [dev-dependencies]
 clap = "2.33.3"

@@ -22,7 +22,7 @@ fn main() {
     let mut src = String::new();
     let _ = file.read_to_string(&mut src).unwrap();
 
-    let mut tokenizer = token::Tokenizer::new(&src);
+    let tokenizer = token::Tokenizer::new(&src);
     let token: Vec<token::Token> = tokenizer.collect();
     for t in token {
         println!("{:?}: \"{}\"", t.kind, t.get_str(&src));

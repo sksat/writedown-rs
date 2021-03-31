@@ -161,7 +161,7 @@ fn get_paragraph(tok: &mut Tokenizer) -> Option<ast::Paragraph> {
             }
             TokenKind::Title(_) | TokenKind::CodeBlock(_) => break,
             _ => {
-                eprintln!("get_paragraph: {:?}", &t.kind);
+                //eprintln!("get_paragraph: {:?}", &t.kind);
                 tok.next();
                 break;
             }
